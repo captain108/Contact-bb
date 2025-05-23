@@ -9,7 +9,7 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemo
 # Setup bot
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
-ADMIN_CHAT_ID = "7597393283 , 6178010957"
+ADMIN_CHAT_ID = "7597393283"
 
 # File path setup
 DATA_DIR = "bot_data"
